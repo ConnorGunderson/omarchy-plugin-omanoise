@@ -7,6 +7,8 @@ Paul Nasca's PADsynth algorithm, and mixes the lot with a noise bed and a bank
 of six environmental sounds straight into PipeWire — forever and never the same
 twice. A bar widget drives it.
 
+![Omanoise panel in Focus, Relax and Environment mode](preview.png)
+
 Sound engine **v5**. v2 synthesized its musical layer by hand (detuned supersaw
 pads, Risset and FM bells, Karplus-Strong plucks, a shimmer bus); it was, in
 the author's words, faintly anxiety-inducing. v3 replaced that layer entirely
