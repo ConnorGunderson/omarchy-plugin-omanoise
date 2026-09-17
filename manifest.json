@@ -6,7 +6,7 @@
   "author": "Joshua Doms",
   "license": "MIT",
   "homepage": "https://github.com/pepsoren/omanoise",
-  "description": "Procedural focus soundscapes in the bar. Sampled piano, harp, vibraphone and music box (libfluidsynth + FluidR3_GM) are sequenced Endel-style over PADsynth wavetable pads and a quiet noise bed \u2014 Focus and Relax \u2014 plus an Environment mode that blends six environments on their own sliders \u2014 a synthesized ocean and rain, and public-domain/CC0 recordings of a fireplace, wind, a stream and a dawn chorus, played as randomly scheduled segments with equal-power crossfades so nothing ever loops. Adapts to the time of day. Tuned for calm: attacks over 150 ms, major pentatonic only, and no periodic modulation anywhere in the audio path.",
+  "description": "Procedural focus soundscapes in the bar, in the spirit of Endel. Sampled piano, harp and vibraphone (libfluidsynth) are sequenced over PADsynth pads and a quiet noise bed in Focus and Relax modes, plus an Environment mode that blends ocean, rain, fireplace, wind, stream and birdsong on their own sliders. Nothing loops: recordings play as randomly scheduled crossfaded segments. Adapts to the time of day and is tuned for calm — slow attacks, major pentatonic, no periodic modulation.",
   "kinds": [
     "service",
     "bar-widget"
