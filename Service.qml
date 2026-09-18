@@ -229,6 +229,11 @@ Item {
     }
   }
 
+  // Set when the engine died mid-playback (it exits with code 2 when the
+  // PipeWire daemon restarts under it), so the restarted engine picks up
+  // where it left off instead of coming back paused.
+  property bool resumeOnRestart: false
+
   // The engine lives as long as this service does; stdin closing on shell
   // exit makes it quit on its own.
   Process {
@@ -238,8 +243,13 @@ Item {
     stdinEnabled: true
     stdout: SplitParser { onRead: function(line) { root.handleLine(line) } }
     stderr: SplitParser { onRead: function(line) { console.warn("omanoise engine: " + line) } }
-    onStarted: { root.engineRunning = true; root.maybeAutoplay() }
+    onStarted: {
+      root.engineRunning = true
+      if (root.resumeOnRestart) { root.resumeOnRestart = false; play() }
+      root.maybeAutoplay()
+    }
     onExited: function(code) {
+      root.resumeOnRestart = root.playing && code !== 0
       root.engineRunning = false
       root.playing = false
       root.meter = 0

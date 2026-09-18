@@ -366,12 +366,29 @@ static void on_process(void *userdata) {
   pw_stream_queue_buffer(a->stream, b);
 }
 
+// Set when a working stream is lost (the PipeWire daemon restarted or the
+// client was disconnected). A pw_stream cannot reconnect, so the engine
+// exits; Service.qml restarts it and resumes playback.
+static bool g_server_lost = false;
+
 static void on_state_changed(void *userdata, enum pw_stream_state old,
                              enum pw_stream_state state, const char *error) {
-  (void)userdata; (void)old;
+  struct app *a = userdata;
   if (state == PW_STREAM_STATE_ERROR) {
     fprintf(stderr, "omanoise: stream error: %s\n", error ? error : "?");
     fflush(stderr);
+  }
+  // A daemon restart drops the stream from PAUSED/STREAMING straight back to
+  // UNCONNECTED (or ERROR) without any call of ours. Only an established
+  // stream counts: an initial connect failure must not become a restart loop
+  // while PipeWire is genuinely absent.
+  if (old >= PW_STREAM_STATE_PAUSED &&
+      (state == PW_STREAM_STATE_UNCONNECTED || state == PW_STREAM_STATE_ERROR)) {
+    fprintf(stderr, "omanoise: lost the PipeWire server (%s), exiting to be restarted\n",
+            error ? error : "connection closed");
+    fflush(stderr);
+    g_server_lost = true;
+    pw_main_loop_quit(a->loop);
   }
 }
 
@@ -948,5 +965,5 @@ int main(int argc, char *argv[]) {
   sf2_destroy(g_sf2);
   bank_free(&g_bank);
   sounds_free();
-  return 0;
+  return g_server_lost ? 2 : 0;
 }
