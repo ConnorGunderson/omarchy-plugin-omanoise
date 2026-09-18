@@ -21,7 +21,8 @@
 
 struct control ctl = {
   .playing = 0, .mode = M_FOCUS, .binaural = 0, .adaptive = 1, .pulse = 0, .modulation = 0,
-  .volume = 0.7f, .intensity = 0.5f, .brightness = 0.5f, .tonal = 0.5f,
+  .envonly = 0, .sway = 0,
+  .volume = 0.7f, .intensity = 0.5f, .brightness = 0.5f, .tonal = 0.5f, .swayrate = 0.4f,
   .env = { 0.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f },
   .sounds = { 1, 1, 0, 0, 0, 0 },
   .adapt_bright = 0.0f, .adapt_root = 0.0f,
@@ -190,6 +191,7 @@ typedef struct {
   drift_t dr[8];
   float   d[8];
   drift_t macro_dr;
+  drift_t sway_dr[ENV_N];       // one slow walk per environment sound
   float   macro;
 
   float g_pad, g_bass, g_mel, g_noise, g_ocean, g_plate;
@@ -455,6 +457,10 @@ int engine_init(uint64_t seed) {
     drift_init(&E.dr[i], seed + 1013u * (uint64_t)(i + 1), 11.0f + 4.1f * (float)i);
   drift_init(&E.macro_dr, seed + 60013u, 26.0f);
   drift_set_alternating(&E.macro_dr, 1);
+  for (int i = 0; i < ENV_N; i++) {
+    drift_init(&E.sway_dr[i], seed + 70021u * (uint64_t)(i + 1), 240.0f * (0.85f + 0.06f * (float)i));
+    drift_set_alternating(&E.sway_dr[i], 1);
+  }
 
   static const float OC_PERIOD[NOCEAN] = { 8.6f, 11.4f, 14.2f };
   static const float OC_PAN[NOCEAN]    = { -0.7f, 0.1f, 0.75f };
@@ -594,6 +600,10 @@ static void engine_control(void) {
   const int core = (g_layers & LAYER_CORE) ? 1 : 0;
   E.g_pad   = core ? db2lin(m->pad_db)  * tonal_g * DRIFTG(0.65f, 1.22f, E.d[0]) : 0.0f;
   E.g_bass  = core ? db2lin(m->bass_db) * tonal_g : 0.0f;
+  // Environment only: nothing but the six environment sounds. Pads and bass
+  // are the whole tonal bed in that mode (melody, noise bed and pulse are
+  // already off in its profile), and the plate only hears them post-gain.
+  if (E.mode == M_ENV && atomic_load(&ctl.envonly)) { E.g_pad = 0.0f; E.g_bass = 0.0f; }
   E.g_mel   = (m->melody_db < -90.0f || !(g_layers & LAYER_EVENTS))
               ? 0.0f : db2lin(m->melody_db) * tonal_g;
   E.g_noise = (core && m->noise_db > -90.0f)
@@ -621,12 +631,22 @@ static void engine_control(void) {
       if (E.envb.rec[i].w != w) rec_attach(&E.envb.rec[i], w);
     }
 
+    // Sway: each sound slowly swells and fades around its slider value on
+    // its own clock, so the blend keeps shifting. A held-random walk rather
+    // than a sine, in keeping with the no-periodic-modulation rule: it
+    // oscillates, but never repeats. Rate maps the base period 8 min .. 1 min;
+    // the walks always run so toggling sway on lands mid-motion, not at a step.
+    const int sway = atomic_load(&ctl.sway);
+    const float sway_base = 480.0f * powf(0.125f, clampf(atomic_load(&ctl.swayrate), 0.0f, 1.0f));
     float lev[ENV_N], w = 0.0f;
     for (int i = 0; i < ENV_N; i++) {
       // A slot with no generator (a recorded slot whose file is missing) is
       // held at zero, so it neither sounds nor takes part in the soft knee.
       int live = (i == ENV_OCEAN || i == ENV_RAIN) || rec_ready(&E.envb.rec[i]);
       lev[i] = (E.env_on && live) ? clampf(atomic_load(&ctl.env[i]), 0.0f, 1.0f) : 0.0f;
+      drift_set_base(&E.sway_dr[i], sway_base * (0.85f + 0.06f * (float)i));
+      float s = drift_step(&E.sway_dr[i], dt);
+      if (sway) lev[i] *= 0.7f + 0.3f * s;        // 0.4 .. 1.0 of the slider: -16 dB .. 0 dB
       w += lev[i] * lev[i];
     }
     float bus = 1.0f / sqrtf(fmaxf(1.0f, w));

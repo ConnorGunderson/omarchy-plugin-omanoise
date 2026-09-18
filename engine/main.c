@@ -11,9 +11,12 @@
 //   volume|intensity|brightness|tonal <0..1>
 //   env ocean|rain|fire|wind|stream|birds <0..1>
 //   binaural|adaptive|pulse|modulation 0|1
+//   envonly|sway 0|1                  (Environment mode: mute the tonal bed / levels sway)
+//   swayrate <0..1>                   (sway period, 8 min .. 1 min)
 //
 // Offline:
 //   --render <mode> <seconds> <out.f32> [--tail <seconds>] [--env name=v,name=v]
+//                                       [--set key=v,key=v]   (any 0..1 param or 0|1 flag)
 //   --render-bank <dir>
 //   --stats                      (event counts + the roughness metric, stderr)
 //   --play                       (start playing immediately)
@@ -190,7 +193,8 @@ static void state_json(char *buf, size_t n) {
   snprintf(buf, n,
     "{\"version\":%d,\"playing\":%s,\"mode\":\"%s\",\"volume\":%.3f,\"intensity\":%.3f,"
     "\"brightness\":%.3f,\"tonal\":%.3f,\"binaural\":%s,\"adaptive\":%s,\"pulse\":%s,"
-    "\"modulation\":%s,\"env\":%s,\"sounds\":%s,"
+    "\"modulation\":%s,\"envonly\":%s,\"sway\":%s,\"swayrate\":%.3f,"
+    "\"env\":%s,\"sounds\":%s,"
     "\"daypart\":\"%s\",\"bank\":%s,\"sf2\":%s,\"lufs\":%.1f}",
     STATE_VERSION,
     atomic_load(&ctl.playing) ? "true" : "false",
@@ -201,6 +205,9 @@ static void state_json(char *buf, size_t n) {
     atomic_load(&ctl.adaptive) ? "true" : "false",
     atomic_load(&ctl.pulse) ? "true" : "false",
     atomic_load(&ctl.modulation) ? "true" : "false",
+    atomic_load(&ctl.envonly) ? "true" : "false",
+    atomic_load(&ctl.sway) ? "true" : "false",
+    (double)atomic_load(&ctl.swayrate),
     envs, snds, g_daypart,
     atomic_load(&ctl.bank_ready) ? "true" : "false",
     atomic_load(&ctl.sf2_ready) ? "true" : "false",
@@ -269,6 +276,9 @@ static void load_state(void) {
   if (json_get_bool(buf, "adaptive", &b)) atomic_store(&ctl.adaptive, b);
   if (json_get_bool(buf, "pulse", &b)) atomic_store(&ctl.pulse, b);
   if (json_get_bool(buf, "modulation", &b)) atomic_store(&ctl.modulation, b);
+  if (json_get_bool(buf, "envonly", &b)) atomic_store(&ctl.envonly, b);
+  if (json_get_bool(buf, "sway", &b)) atomic_store(&ctl.sway, b);
+  if (json_get_num(buf, "swayrate", &v)) atomic_store(&ctl.swayrate, clampf(v, 0, 1));
   // `sleep` and `ocean` are accepted for ever and resolve to relax and
   // environment (brain.c:MODE_ALIAS), which is the v3 -> v4 mode migration.
   if (json_get_str(buf, "mode", str, sizeof str)) { int m = mode_from_name(str); if (m >= 0) atomic_store(&ctl.mode, m); }
@@ -420,6 +430,7 @@ static void handle_command(char *line) {
   else if (!strcmp(cmd, "intensity") && parse01(arg, &v)) atomic_store(&ctl.intensity, v);
   else if (!strcmp(cmd, "brightness") && parse01(arg, &v)) atomic_store(&ctl.brightness, v);
   else if (!strcmp(cmd, "tonal") && parse01(arg, &v)) atomic_store(&ctl.tonal, v);
+  else if (!strcmp(cmd, "swayrate") && parse01(arg, &v)) atomic_store(&ctl.swayrate, v);
   else if (!strcmp(cmd, "env")) {
     int e = arg ? env_from_name(arg) : -1;
     if (e < 0 || !parse01(arg2, &v)) {
@@ -432,6 +443,8 @@ static void handle_command(char *line) {
   else if (!strcmp(cmd, "binaural") && parse_bool(arg, &b)) atomic_store(&ctl.binaural, b);
   else if (!strcmp(cmd, "pulse") && parse_bool(arg, &b)) atomic_store(&ctl.pulse, b);
   else if (!strcmp(cmd, "modulation") && parse_bool(arg, &b)) atomic_store(&ctl.modulation, b);
+  else if (!strcmp(cmd, "envonly") && parse_bool(arg, &b)) atomic_store(&ctl.envonly, b);
+  else if (!strcmp(cmd, "sway") && parse_bool(arg, &b)) atomic_store(&ctl.sway, b);
   else if (!strcmp(cmd, "adaptive") && parse_bool(arg, &b)) { atomic_store(&ctl.adaptive, b); update_daypart(); }
   else { printf("error unknown command %s\n", cmd); fflush(stdout); return; }
 
@@ -609,12 +622,39 @@ static void apply_env_override(const char *spec) {
   }
 }
 
+// --set key=v,...: any 0..1 parameter or 0|1 flag, by its command name.
+static void apply_set_override(const char *spec) {
+  char buf[256];
+  snprintf(buf, sizeof buf, "%s", spec);
+  for (char *tok = strtok(buf, ","); tok; tok = strtok(NULL, ",")) {
+    char *eq = strchr(tok, '=');
+    if (!eq) continue;
+    *eq = 0;
+    float v = clampf(strtof(eq + 1, NULL), 0.0f, 1.0f);
+    int b = v >= 0.5f;
+    if (!strcmp(tok, "volume")) atomic_store(&ctl.volume, v);
+    else if (!strcmp(tok, "intensity")) atomic_store(&ctl.intensity, v);
+    else if (!strcmp(tok, "brightness")) atomic_store(&ctl.brightness, v);
+    else if (!strcmp(tok, "tonal")) atomic_store(&ctl.tonal, v);
+    else if (!strcmp(tok, "swayrate")) atomic_store(&ctl.swayrate, v);
+    else if (!strcmp(tok, "binaural")) atomic_store(&ctl.binaural, b);
+    else if (!strcmp(tok, "adaptive")) atomic_store(&ctl.adaptive, b);
+    else if (!strcmp(tok, "pulse")) atomic_store(&ctl.pulse, b);
+    else if (!strcmp(tok, "modulation")) atomic_store(&ctl.modulation, b);
+    else if (!strcmp(tok, "envonly")) atomic_store(&ctl.envonly, b);
+    else if (!strcmp(tok, "sway")) atomic_store(&ctl.sway, b);
+    else fprintf(stderr, "--set: unknown key %s\n", tok);
+  }
+}
+
 static int render_file(const char *mode, const char *secs, const char *path,
-                       float tail_s, int stats, int layers, const char *env_spec) {
+                       float tail_s, int stats, int layers, const char *env_spec,
+                       const char *set_spec) {
   int m = mode_from_name(mode);
   if (m < 0) { fprintf(stderr, "unknown mode\n"); return 1; }
   atomic_store(&ctl.mode, m);
   if (env_spec) apply_env_override(env_spec);
+  if (set_spec) apply_set_override(set_spec);
   update_daypart();
   if (engine_init((uint64_t)time(NULL) * 0x2545F4914F6CDD1Dull ^ (uint64_t)getpid())) {
     fprintf(stderr, "engine init failed\n");
@@ -837,13 +877,15 @@ int main(int argc, char *argv[]) {
     float tail = 0.0f;
     int stats = 0, layers = LAYER_ALL;
     const char *env_spec = NULL;
+    const char *set_spec = NULL;
     for (int i = 5; i < argc; i++) {
       if (!strcmp(argv[i], "--tail") && i + 1 < argc) tail = (float)atof(argv[++i]);
       else if (!strcmp(argv[i], "--stats")) stats = 1;
       else if (!strcmp(argv[i], "--layers") && i + 1 < argc) layers = atoi(argv[++i]);
       else if (!strcmp(argv[i], "--env") && i + 1 < argc) env_spec = argv[++i];
+      else if (!strcmp(argv[i], "--set") && i + 1 < argc) set_spec = argv[++i];
     }
-    return render_file(argv[2], argv[3], argv[4], tail, stats, layers, env_spec);
+    return render_file(argv[2], argv[3], argv[4], tail, stats, layers, env_spec, set_spec);
   }
 
   pw_init(&argc, &argv);

@@ -26,6 +26,9 @@ Panel {
   readonly property bool modulation: svc ? svc.modulation : false
   readonly property bool adaptive: svc ? svc.adaptive : false
   readonly property bool pulse: svc ? svc.pulse : false
+  readonly property bool envOnly: svc ? svc.envOnly : false
+  readonly property bool sway: svc ? svc.sway : false
+  readonly property real swayRate: svc ? svc.swayRate : 0
   readonly property var envSounds: svc ? svc.envSounds : []
   readonly property real meter: svc ? svc.meter : 0
   readonly property bool engineFound: svc ? svc.engineFound : false
@@ -73,6 +76,9 @@ Panel {
     function volume(v: string): void { root.setVolume(Number(v)) }
     function env(name: string, v: string): void { if (root.svc) root.svc.setEnv(name, Number(v)) }
     function timer(minutes: string): void { root.setTimer(Math.max(0, Math.round(Number(minutes) || 0))) }
+    function envonly(on: string): void { if (root.svc) root.svc.setFlag("envonly", on === "1" || on === "on" || on === "true") }
+    function sway(on: string): void { if (root.svc) root.svc.setFlag("sway", on === "1" || on === "on" || on === "true") }
+    function swayrate(v: string): void { if (root.svc) root.svc.setParam("swayrate", Number(v)) }
     function state(): string { return root.svc ? root.svc.stateJson() : "{\"error\":\"service not loaded\"}" }
   }
 
@@ -447,6 +453,28 @@ Panel {
             description: "Soft 64 bpm tick under the wash"
             checked: root.pulse
             onClicked: if (root.svc) root.svc.setFlag("pulse", !root.pulse)
+          }
+
+          OptionRow {
+            visible: root.mode === "environment"
+            label: "Environment only"
+            description: "Mute the faint pad and bass — just the sounds"
+            checked: root.envOnly
+            onClicked: if (root.svc) root.svc.setFlag("envonly", !root.envOnly)
+          }
+
+          OptionRow {
+            visible: root.mode === "environment"
+            label: "Sway"
+            description: "Each sound slowly swells and fades on its own clock, so the blend keeps shifting"
+            checked: root.sway
+            onClicked: if (root.svc) root.svc.setFlag("sway", !root.sway)
+          }
+
+          ParamRow {
+            visible: root.mode === "environment" && root.sway
+            label: "Sway speed"; icon: "󰑙"; param: "swayrate"; paramValue: root.swayRate
+            hint: "A full swell every ~8 minutes ↔ every ~1 minute"
           }
         }
 

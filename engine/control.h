@@ -14,10 +14,13 @@ struct control {
   atomic_int adaptive;
   atomic_int pulse;
   atomic_int modulation;        // 16 Hz AM (focus only)
+  atomic_int envonly;           // Environment mode: mute the tonal bed
+  atomic_int sway;              // Environment mode: levels swell and fade
   _Atomic float volume;
   _Atomic float intensity;
   _Atomic float brightness;
   _Atomic float tonal;
+  _Atomic float swayrate;       // 0..1, sway period 8 min .. 1 min
   _Atomic float env[ENV_N];     // Environment bank levels, 0..1 (ENV_* order)
   // 1 when the slot can make a sound: the synthesized slots always, a recorded
   // slot once its WAV has loaded. Mirrored into the state JSON as `sounds`.

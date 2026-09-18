@@ -35,6 +35,9 @@ Item {
   property bool modulation: false
   property bool adaptive: true
   property bool pulse: false
+  property bool envOnly: false
+  property bool sway: false
+  property real swayRate: 0.4
   property string daypart: "day"
   property bool bankReady: false
   property bool sf2Ready: false
@@ -129,6 +132,9 @@ Item {
       root.modulation = !!s.modulation
       root.adaptive = !!s.adaptive
       root.pulse = !!s.pulse
+      root.envOnly = !!s.envonly
+      root.sway = !!s.sway
+      if (s.swayrate !== undefined) root.swayRate = Number(s.swayrate)
       if (s.env !== undefined && s.env !== null) root.env = s.env
       if (s.sounds !== undefined && s.sounds !== null) root.sounds = s.sounds
       root.daypart = String(s.daypart || "day")
@@ -173,7 +179,8 @@ Item {
   function stateJson() {
     return JSON.stringify({ playing: playing, mode: mode, volume: volume, intensity: intensity,
       brightness: brightness, tonal: tonal, binaural: binaural, adaptive: adaptive, pulse: pulse,
-      modulation: modulation, env: env, sounds: sounds,
+      modulation: modulation, envonly: envOnly, sway: sway, swayrate: swayRate,
+      env: env, sounds: sounds,
       bank: bankReady, sf2: sf2Ready, soundfont: soundfontFound,
       daypart: daypart, timerRemainingSec: timerRemainingSec, engine: engineRunning })
   }

@@ -110,6 +110,9 @@ per-app volume works too. Settings persist in `~/.local/state/omanoise.json`.
   omanoise env rain 0.6   ocean | rain | fire | wind | stream | birds, 0-1 each
   omanoise volume 0.5
   omanoise timer 45     stop after 45 minutes
+  omanoise envonly 1    Environment mode: mute the pad and bass, sounds only
+  omanoise sway 1       Environment mode: levels slowly swell and fade
+  omanoise swayrate 0.4   0 = a swell every ~8 min, 1 = every ~1 min
   omanoise panel        open/close the popup
   ```
 
@@ -281,10 +284,13 @@ mode focus|relax|environment        (sleep -> relax, ocean/env -> environment)
 volume|intensity|brightness|tonal <0..1>
 env ocean|rain|fire|wind|stream|birds <0..1>
 binaural|adaptive|pulse|modulation 0|1
+envonly|sway 0|1                    (Environment mode only)
+swayrate <0..1>                     (sway period, 8 min .. 1 min)
 ```
 
 `state` JSON fields: `version` (5), `playing`, `mode`, `volume`, `intensity`,
 `brightness`, `tonal`, `binaural`, `adaptive`, `pulse`, `modulation`,
+`envonly`, `sway`, `swayrate`,
 `env` (an object with the six level keys), `sounds` (the same six keys, `true`
 when the slot can make a sound — the synthesized ones always, a recorded one
 once its WAV has loaded), `daypart`, `bank`, `sf2`, `lufs` (short-term

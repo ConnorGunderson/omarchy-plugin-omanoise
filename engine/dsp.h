@@ -168,6 +168,15 @@ void drift_init(drift_t *d, uint64_t seed, float period_s);
 // generator reliably swings between its extremes instead of occasionally
 // dithering around the middle. Used for the macro "Animate" contour.
 void drift_set_alternating(drift_t *d, int on);
+// Retune the base period live. The current segment is stretched or shrunk in
+// place so its phase is kept and the output stays continuous.
+static inline void drift_set_base(drift_t *d, float base_s) {
+  if (base_s <= 0.0f || base_s == d->base) return;
+  float ratio = base_s / d->base;
+  d->base = base_s;
+  d->period *= ratio;
+  d->t *= ratio;
+}
 
 static inline float drift_step(drift_t *d, float dt) {
   d->t += dt;
