@@ -6,12 +6,15 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p bin
+# pkg-config output is a list of flags; split it into arrays on purpose.
+read -ra cflags <<< "$(pkg-config --cflags libpipewire-0.3 fluidsynth)"
+read -ra libs <<< "$(pkg-config --libs libpipewire-0.3 fluidsynth)"
 gcc -O2 -Wall -Wextra -std=gnu11 \
-  $(pkg-config --cflags libpipewire-0.3 fluidsynth) \
+  "${cflags[@]}" \
   -o bin/omanoise-engine \
   engine/main.c engine/dsp.c engine/padsynth.c engine/bank.c engine/brain.c \
   engine/sf2.c engine/fx.c engine/master.c engine/wav.c engine/env.c engine/layers.c \
-  $(pkg-config --libs libpipewire-0.3 fluidsynth) -lpthread -lm
+  "${libs[@]}" -lpthread -lm
 echo "built bin/omanoise-engine"
 # Environment recordings ship as small .ogg files (see sounds/LICENSES.md); the
 # engine reads 48 kHz 16-bit WAV, so convert any that are missing or stale.
